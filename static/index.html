@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bulk API Runner</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232563EB'/%3E%3Cpath d='M9 10h14M9 16h14M9 22h9' stroke='white' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/vendor/codemirror/codemirror.css">
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body>
+  <div id="dbBanner" class="banner banner-error hidden" role="alert"></div>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="22" height="22" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#2563EB"/><path d="M9 10h14M9 16h14M9 22h9" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+      <span>Bulk API Runner</span>
+    </div>
+    <div class="topbar-spacer"></div>
+    <label class="env-picker">
+      <span class="muted-light">Environment</span>
+      <select id="envSelect" aria-label="Active environment"></select>
+    </label>
+    <button id="envManage" class="btn btn-ghost-light" title="Manage environments">Manage</button>
+    <button id="authProfiles" class="btn btn-ghost-light" title="Token endpoints the app fetches Bearer tokens from">Auth profiles</button>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <span>Collections</span>
+        <div class="sidebar-actions">
+          <button class="icon-btn-light" id="newCollection" title="New collection">＋</button>
+          <button class="icon-btn-light" id="importCollection" title="Import collection (JSON)">⤓</button>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <div id="tree" class="tree" role="tree"></div>
+    </aside>
+
+    <main class="workspace">
+      <section id="editor" class="editor"></section>
+      <div id="monitorResizer" class="resizer" title="Drag to resize"></div>
+      <section id="monitor" class="monitor"></section>
+    </main>
+  </div>
+
+  <div id="ctxmenu" class="ctxmenu hidden" role="menu"></div>
+  <div id="modalRoot"></div>
+  <div id="toastRoot" class="toasts" aria-live="polite"></div>
+
+  <script src="/static/vendor/codemirror/codemirror.js"></script>
+  <script src="/static/vendor/codemirror/mode/python/python.js"></script>
+  <script src="/static/vendor/codemirror/addon/matchbrackets.js"></script>
+  <script src="/static/vendor/codemirror/addon/active-line.js"></script>
+  <script src="/static/vendor/codemirror/addon/closebrackets.js"></script>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+{
+  "format": "bulk-api-runner/collection",
+  "version": 1,
+  "folder": {
+    "name": "employee-attendance-management-system",
+    "auth": {"type": "bearer", "token": "{{bearer_token}}"},
+    "folders": [],
+    "requests": [
+      {
+        "name": "Attendance - bulk schedule",
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/attendance/schedule/bulk",
+        "headers": [], "params": [],
+        "auth": {"type": "inherit"},
+        "data_source": {"sheet": null, "header_row": 1, "sample_file": "samples/EAMS_Schedule_template_1.xlsx"},
+        "script_file": "scripts/attendance_bulk_schedule.py",
+        "settings": {
+          "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": true,
+          "retry": {"max_retries": 3, "on_status": [503], "backoff_ms": 1000},
+          "success": {"require_2xx": true, "code_field": "code", "code_values": [200, 202]}
+        }
+      },
+      {
+        "name": "Warehouse - create",
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/warehouse/create",
+        "headers": [], "params": [],
+        "auth": {"type": "inherit"},
+        "data_source": {"sheet": null, "header_row": 1, "sample_file": "samples/Eams_New_Warehouse_Registration_Template.xlsx"},
+        "script_file": "scripts/warehouse_create.py",
+        "settings": {
+          "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": false,
+          "retry": {"max_retries": 0, "on_status": [503], "backoff_ms": 1000},
+          "success": {"require_2xx": true, "code_field": "code", "code_values": [200]}
+        }
+      },
+      {
+        "name": "Employee - create",
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/employee/create",
+        "headers": [], "params": [],
+        "auth": {"type": "inherit"},
+        "data_source": {"sheet": null, "header_row": 1, "sample_file": "samples/EAMS_NEW_EMPLOYEE_TEMPLATE.xlsx"},
+        "script_file": "scripts/employee_create.py",
+        "settings": {
+          "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": false,
+          "retry": {"max_retries": 0, "on_status": [503], "backoff_ms": 1000},
+          "success": {"require_2xx": true, "code_field": "code", "code_values": [200]}
+        }
+      },
+      {
+        "name": "Employee - find by email",
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/employee/list",
+        "headers": [],
+        "params": [{"key": "page", "value": "1", "enabled": true}, {"key": "page_size", "value": "10", "enabled": true}],
+        "auth": {"type": "inherit"},
+        "data_source": {"sheet": null, "header_row": 1},
+        "script_file": "scripts/employee_find_by_email.py",
+        "settings": {
+          "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": true,
+          "retry": {"max_retries": 0, "on_status": [503], "backoff_ms": 1000},
+          "success": {"require_2xx": true, "code_field": "code", "code_values": [200]}
+        }
+      }
+    ]
+  },
+  "environments": [
+    {"name": "Development", "active": true, "variables": [
+      {"key": "base_url", "value": "https://eams.development.mofi.id", "secret": false},
+      {"key": "bearer_token", "value": "", "secret": true}
+    ]},
+    {"name": "Production", "active": false, "variables": [
+      {"key": "base_url", "value": "", "secret": false},
+      {"key": "bearer_token", "value": "", "secret": true}
+    ]}
+  ]
+}
