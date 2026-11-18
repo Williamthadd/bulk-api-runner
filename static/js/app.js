@@ -1,7 +1,7 @@
 // Bootstrap: wire sidebar, editor routing, environments, monitor and health checks.
 import { GET, POST, setDbBanner } from './api.js';
 import { el, clear, $, toast } from './util.js';
-import { state } from './store.js';
+import { state, store } from './store.js';
 import { loadTree, markActive, newFolder } from './tree.js';
 import { loadEnvs } from './envs.js';
 import { loadProfiles, openProfileManager } from './profiles.js';
@@ -48,6 +48,46 @@ $('#importFile').addEventListener('change', async (e) => {
   } catch (err) { toast(err instanceof SyntaxError ? 'Not a valid JSON file' : err.message, 'error'); }
 });
 window.addEventListener('hashchange', route);
+
+// Sidebar: drag the handle to resize, double-click (or Enter) to collapse/expand. Remembered between visits.
+function initSidebarResizer() {
+  const sb = $('#sidebar'), rz = $('#sidebarResizer');
+  const MIN = 180, MAX = () => Math.max(MIN, Math.min(640, window.innerWidth - 360));
+  const setWidth = (w) => { sb.style.width = Math.max(MIN, Math.min(MAX(), w)) + 'px'; };
+  const setCollapsed = (c) => { document.body.classList.toggle('sidebar-collapsed', c); store.set('sidebarCollapsed', c); };
+  const saved = store.get('sidebarWidth', null);
+  if (saved) setWidth(saved);
+  setCollapsed(!!store.get('sidebarCollapsed', false));
+  rz.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    rz.classList.add('dragging'); document.body.classList.add('resizing');
+    const left = sb.getBoundingClientRect().left;
+    const move = (ev) => {
+      const w = ev.clientX - left;
+      if (w < MIN / 2) { setCollapsed(true); return; }          // dragged almost shut: collapse
+      document.body.classList.remove('sidebar-collapsed'); setWidth(w);
+    };
+    const up = () => {
+      rz.classList.remove('dragging'); document.body.classList.remove('resizing');
+      window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up);
+      if (document.body.classList.contains('sidebar-collapsed')) store.set('sidebarCollapsed', true);
+      else { store.set('sidebarCollapsed', false); store.set('sidebarWidth', parseInt(sb.style.width, 10) || 290); }
+    };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  });
+  const toggle = () => setCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+  rz.addEventListener('dblclick', toggle);
+  rz.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault(); document.body.classList.remove('sidebar-collapsed');
+      setWidth(sb.getBoundingClientRect().width + (e.key === 'ArrowRight' ? 20 : -20));
+      store.set('sidebarCollapsed', false); store.set('sidebarWidth', parseInt(sb.style.width, 10));
+    }
+  });
+  window.addEventListener('resize', () => { if (sb.style.width) setWidth(parseInt(sb.style.width, 10)); });
+}
+initSidebarResizer();
 
 (async () => {
   initMonitor();

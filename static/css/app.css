@@ -44,7 +44,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- layout ---------- */
 .layout { flex: 1; display: flex; min-height: 0; }
-.sidebar { width: 290px; flex: none; background: var(--navy); color: #E2E8F0; display: flex; flex-direction: column;
+.sidebar { width: 290px; min-width: 0; overflow: hidden; flex: none; background: var(--navy); color: #E2E8F0; display: flex; flex-direction: column;
            border-right: 1px solid #0A1A3F; }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px;
                 font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: #93B4F0; }
@@ -279,3 +279,10 @@ dl.facts dd { margin: 0; font-weight: 500; word-break: break-all; }
 
 /* auth profiles */
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+
+/* resizable / collapsible sidebar */
+.vresizer { width: 6px; flex: none; cursor: col-resize; background: var(--border-soft); border-left: 1px solid var(--border); position: relative; }
+.vresizer:hover, .vresizer.dragging, .vresizer:focus-visible { background: var(--primary-soft); outline: none; }
+.vresizer::after { content: ""; position: absolute; top: 50%; left: 1px; width: 2px; height: 28px; margin-top: -14px; border-radius: 2px; background: var(--muted); opacity: .5; }
+body.sidebar-collapsed .sidebar { width: 0 !important; border-right: 0; }
+body.resizing { cursor: col-resize; user-select: none; }
