@@ -12,7 +12,7 @@
         "url": "{{base_url}}/api/v1/attendance/schedule/bulk",
         "headers": [], "params": [],
         "auth": {"type": "inherit"},
-        "data_source": {"sheet": null, "header_row": 1, "sample_file": "samples/EAMS_Schedule_template_1.xlsx"},
+        "data_source": {"sheet": null, "header_row": 1, "sample_file": "samples/EAMS_Schedule_template_2.xlsx"},
         "script_file": "scripts/attendance_bulk_schedule.py",
         "settings": {
           "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": true,
@@ -44,21 +44,6 @@
         "script_file": "scripts/employee_create.py",
         "settings": {
           "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": false,
-          "retry": {"max_retries": 0, "on_status": [503], "backoff_ms": 1000},
-          "success": {"require_2xx": true, "code_field": "code", "code_values": [200]}
-        }
-      },
-      {
-        "name": "Employee - find by email",
-        "method": "GET",
-        "url": "{{base_url}}/api/v1/employee/list",
-        "headers": [],
-        "params": [{"key": "page", "value": "1", "enabled": true}, {"key": "page_size", "value": "10", "enabled": true}],
-        "auth": {"type": "inherit"},
-        "data_source": {"sheet": null, "header_row": 1},
-        "script_file": "scripts/employee_find_by_email.py",
-        "settings": {
-          "delay_ms": 0, "timeout_s": 30, "stop_on_error": false, "pause_on_401": true, "idempotent": true,
           "retry": {"max_retries": 0, "on_status": [503], "backoff_ms": 1000},
           "success": {"require_2xx": true, "code_field": "code", "code_values": [200]}
         }

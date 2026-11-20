@@ -1,12 +1,15 @@
 from collections import OrderedDict
 from datetime import datetime, date, time
 
-ROLE_ID = "dc74712f-42a2-44a8-a2c7-361851610bc6"
+# Set to True once the backend accepts several shifts on the same date for one employee.
+ALLOW_MULTIPLE_SHIFTS_PER_DATE = False
+
 
 def to_date(v):
     if isinstance(v, datetime): return v.date()
     if isinstance(v, date): return v
     return datetime.strptime(str(v).strip(), "%Y-%m-%d").date()
+
 
 def to_time(v):
     if isinstance(v, datetime): v = v.time()
@@ -17,41 +20,52 @@ def to_time(v):
     if secs >= 86400: raise ValueError("time out of range")
     return time(secs // 3600, secs % 3600 // 60)
 
-def find_employee_id(ctx, email):
-    res = ctx.call("Employee - find by email", query={"filter_keys": "employee_email", "value": email})
-    for it in ((res.get("data") or {}).get("items") or []):
-        if (it.get("employee_email") or "").strip().lower() == email:
-            return it["id"]
-    raise LookupError(f"employee {email} not found")
 
 def transform(rows, ctx):
-    groups = OrderedDict()  # (email, warehouse_id) -> {"errors": [], "days": {}}
+    """Excel rows -> ONE request body: an array with one element per (employee, warehouse).
+
+    Expected columns: email, warehouse, date, start_time, end_time.
+    The backend sets role_id itself, and resolves employee and warehouse from
+    email / warehouse_name, so no UUIDs are needed here.
+    """
+    # (email, warehouse) lower-cased -> {"email", "warehouse_name", "errors", "shifts"}
+    groups = OrderedDict()
     for r in rows:
         n = r["_row"]
         email = str(r.get("email") or "").strip().lower()
-        wh = str(r.get("warehouse_uuid") or "").strip()
+        wh = " ".join(str(r.get("warehouse") or "").split())  # trim + collapse inner spaces
         if not email or not wh:
-            ctx.skip(f"row {n}", "email and warehouse_uuid are required"); continue
-        g = groups.setdefault((email, wh), {"errors": [], "days": {}})
+            ctx.skip(f"row {n}", "email and warehouse are required"); continue
+        g = groups.setdefault((email, wh.lower()),
+                              {"email": email, "warehouse_name": wh, "errors": [], "shifts": {}})
         try:
+            if "@" not in email: raise ValueError(f"email is not valid: {email!r}")
             d, st, et = to_date(r.get("date")), to_time(r.get("start_time")), to_time(r.get("end_time"))
             if et <= st: raise ValueError("end_time must be after start_time")
-            if d in g["days"]: raise ValueError(f"duplicate date {d}")
-            g["days"][d] = {"date": d.isoformat(),
-                            "scheduled_time_start": f"{d} {st:%H:%M}:00",
-                            "scheduled_time_end": f"{d} {et:%H:%M}:00",
-                            "status": "off"}
+            if (d, st, et) in g["shifts"]:
+                raise ValueError(f"duplicate shift {d} {st:%H:%M}-{et:%H:%M}")
+            if not ALLOW_MULTIPLE_SHIFTS_PER_DATE and any(k[0] == d for k in g["shifts"]):
+                raise ValueError(f"duplicate date {d}")
+            g["shifts"][(d, st, et)] = {
+                "date": d.isoformat(),
+                "scheduled_time_end": f"{d} {et:%H:%M}:00",
+                "scheduled_time_start": f"{d} {st:%H:%M}:00",
+                "status": "off",
+            }
         except (ValueError, TypeError) as e:
             g["errors"].append(f"row {n}: {e}")
-    items = []
-    for (email, wh), g in groups.items():
-        try:
-            if g["errors"]: raise ValueError("; ".join(g["errors"]))
-            employee_id = find_employee_id(ctx, email)
-        except (ValueError, LookupError) as e:
-            ctx.skip(email, str(e)); continue
-        items.append({"label": email, "body": {
-            "employee_id": employee_id, "role_id": ROLE_ID,
-            "schedules": [g["days"][k] for k in sorted(g["days"])],
-            "warehouse_id": wh}})
-    return items
+
+    body = []
+    for (email, _), g in groups.items():
+        if g["errors"]:
+            ctx.skip(f"{g['email']} / {g['warehouse_name']}", "; ".join(g["errors"])); continue
+        body.append({
+            "email": g["email"],
+            "schedules": [g["shifts"][k] for k in sorted(g["shifts"])],
+            "warehouse_name": g["warehouse_name"],
+        })
+
+    if not body:
+        return []
+    # A single request carries every employee, so there is exactly one item.
+    return [{"label": f"{len(body)} employee schedule group(s)", "body": body}]

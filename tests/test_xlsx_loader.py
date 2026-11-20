@@ -62,7 +62,7 @@ def test_preview_detects_types(book):
 
 def test_samples_load():
     cols, rows = load_rows(str(SCHEDULE_XLSX))
-    assert cols == ["email", "warehouse_uuid", "date", "start_time", "end_time"]
+    assert cols == ["email", "warehouse", "date", "start_time", "end_time"]
     assert len(rows) == 87
     assert isinstance(rows[0]["date"], datetime) and isinstance(rows[0]["start_time"], time)
     _, rows = load_rows(str(WAREHOUSE_XLSX))

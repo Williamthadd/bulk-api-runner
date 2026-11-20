@@ -100,7 +100,9 @@ def make_handler(args):
                     n = STATE["bulk_calls"]
                 if n <= args.fail_503:
                     return self._send(503, {"code": 503, "msg": "service busy, try again", "data": None})
-                sc = len(body.get("schedules") or [])
+                # the body is an array: one element per (employee, warehouse), each with its own "schedules"
+                groups = body if isinstance(body, list) else [body]
+                sc = sum(len((g or {}).get("schedules") or []) for g in groups)
                 return self._send(202, {"code": 202, "msg": "schedule upload accepted",
                                         "data": {"upload_id": str(uuid.uuid4()), "schedule_count": sc,
                                                  "batch_count": max(1, (sc + 49) // 50)}})

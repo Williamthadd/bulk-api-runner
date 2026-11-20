@@ -45,14 +45,15 @@ def test_seed_loaded_only_once(db):
         assert [f["name"] for f in tree] == ["employee-attendance-management-system"]
         root = tree[0]
         assert [r["name"] for r in root["requests"]] == [
-            "Attendance - bulk schedule", "Warehouse - create", "Employee - create", "Employee - find by email"]
+            "Attendance - bulk schedule", "Warehouse - create", "Employee - create"]
         assert root["auth"]["type"] == "bearer" and root["auth"]["token"] == "{{bearer_token}}"
         reqs = s.scalars(select(Request)).all()
         assert all(r.auth_config["type"] == "inherit" for r in reqs)
-        find = next(r for r in reqs if r.name == "Employee - find by email")
-        assert find.method == "GET" and [p["key"] for p in find.params] == ["page", "page_size"]
         bulk = next(r for r in reqs if r.name == "Attendance - bulk schedule")
         assert "def transform" in bulk.script and bulk.settings["retry"]["max_retries"] == 3
+        assert "ALLOW_MULTIPLE_SHIFTS_PER_DATE" in bulk.script            # the new bulk-schedule script
+        wh = next(r for r in reqs if r.name == "Warehouse - create")
+        assert "VALID_TIMEZONES" in wh.script and '"timezone": tz' in wh.script
         env, variables, secrets, _ = svc.env_runtime(s)
         assert env.name == "Development" and variables == {"base_url": "https://eams.development.mofi.id", "bearer_token": ""}
         bt = s.scalar(select(EnvironmentVariable).where(EnvironmentVariable.key == "bearer_token",

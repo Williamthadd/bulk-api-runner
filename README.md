@@ -64,7 +64,7 @@ On the first start, `data/secret.key` is generated. **Keep it** (see [Secrets](#
    **"send valid items only"**.
 6. **Monitor** (bottom panel, resizable and collapsible) shows progress live.
 
-Requests without a data source (e.g. *Employee - find by email*) can be dry-run without a file; the script then
+Requests without a data source can be dry-run without a file; the script then
 gets `rows = []`.
 
 ## Script contract
@@ -186,10 +186,9 @@ On first start (empty `folders` table) the app loads `seed/collection.json` with
 
 | Request | Method / URL | Source |
 |---|---|---|
-| Attendance - bulk schedule | `POST {{base_url}}/api/v1/attendance/schedule/bulk` | `samples/EAMS_Schedule_template_1.xlsx`. One item per employee; `employee_id` is looked up via `ctx.call("Employee - find by email")`; one bad row skips the whole employee. |
-| Warehouse - create | `POST {{base_url}}/api/v1/warehouse/create` | `samples/Eams_New_Warehouse_Registration_Template.xlsx` |
+| Attendance - bulk schedule | `POST {{base_url}}/api/v1/attendance/schedule/bulk` | `samples/EAMS_Schedule_template_2.xlsx` (columns `email`, `warehouse`, `date`, `start_time`, `end_time`). **One request** whose body is an array with one element per (employee, warehouse): `{email, warehouse_name, schedules: [...]}`. The backend resolves the employee and warehouse from the email and warehouse name, so no lookups or UUIDs are needed. A bad row skips that whole employee/warehouse group. |
+| Warehouse - create | `POST {{base_url}}/api/v1/warehouse/create` | `samples/Eams_New_Warehouse_Registration_Template.xlsx`. Needs a `timezone` column (`WIB`, `WITA` or `WIT`); the sample file has none, so its row is skipped. |
 | Employee - create | `POST {{base_url}}/api/v1/employee/create` | `samples/EAMS_NEW_EMPLOYEE_TEMPLATE.xlsx` |
-| Employee - find by email | `GET {{base_url}}/api/v1/employee/list?page=1&page_size=10` | helper, no data source |
 
 The environments **Development** (`base_url = https://eams.development.mofi.id`) and **Production** (`base_url` empty)
 both have an empty secret `bearer_token`. Paste a token before sending, or set up an auth profile (no auth profile is
@@ -242,7 +241,7 @@ change them inside MySQL too or start from a fresh volume.
 
 ## Rehearsing without a real server
 
-`devtools/fake_eams.py` is a local fake of the four EAMS endpoints (stdlib only):
+`devtools/fake_eams.py` is a local fake of the EAMS endpoints (stdlib only):
 
 ```bash
 python devtools/fake_eams.py --port 8899 --expire-after 3 --fail-503 1
@@ -271,12 +270,12 @@ API: HTTP tests use a fake local server.
 |---|---|
 | `test_xlsx_loader.py` | date/time/number types, empty rows skipped, sheet + header row, duplicate/blank headers, type detection |
 | `test_sandbox.py` | items/logs/skip/warn, line numbers in tracebacks, syntax errors, timeout kill, hard exit, read-only `ctx.vars`, `ctx.call` RPC, `DryRunBlocked` |
-| `test_default_scripts.py` | the three seed scripts against `samples/`: 31/25/31 shifts per employee with the exact body, warehouse latitude skip, employee phone `08174949338` and `nik` as a string |
+| `test_default_scripts.py` | the three seed scripts against `samples/`: one bulk-schedule item with an array body of 31/25/31 shifts per employee in file order, bad-row skipping, warehouse latitude skip and timezone rules, employee phone `08174949338` and `nik` as a string |
 | `test_auth.py` | folder vs request token, manual Authorization rejected, empty token blocks, cURL masking, success criteria |
 | `test_runner.py` | success, `code != 200` = failure, 503 retry + backoff, 4xx never retried, stop on error, 401 pause → Resume re-sends only that item with the new token, 401 as failure when disabled, pause/stop, masking |
 | `test_db.py` | Alembic upgrade/downgrade from empty, seed only once, encryption at rest + lost key, export without secrets, cascade folder → request, retention, masking + 64 KB truncation in `run_items`, DB unavailable (503 + health), runner survives a DB outage, upload expiry |
 | `test_auth_profiles.py` | token endpoint form + caching + refresh before expiry, readable/masked errors, run refreshes once after 401 then pauses, pause when the token cannot be fetched, profile CRUD never returns the secret, folder profile used for dry run/cURL/send, delete blocked while in use, export/import by name |
-| `test_api.py` | end-to-end through the HTTP API: upload → dry run (with `ctx.call`) → send → 202 accepted data → history after restart → CSV; send guards (empty token, changed script/file, skipped items); `DryRunBlocked`; request token override; retry failed only; tree CRUD and move; upload limits |
+| `test_api.py` | end-to-end through the HTTP API: upload → dry run → send → 202 accepted data → history after restart → CSV; send guards (empty token, changed script/file, skipped items); `DryRunBlocked`; `ctx.call` through the engine; request token override; retry failed only; tree CRUD and move; upload limits |
 
 ## Project layout
 

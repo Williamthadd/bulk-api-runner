@@ -24,7 +24,7 @@ def fake_eams(req):
         items = [{"id": IDS[email], "employee_email": email}] if email in IDS else []
         return 200, {"code": 200, "msg": "success", "data": {"items": items, "page": 1}}
     if p == "/api/v1/attendance/schedule/bulk":
-        n = len(req["json"]["schedules"])
+        n = sum(len(g["schedules"]) for g in req["json"])        # the body is an array of groups
         return 202, {"code": 202, "msg": "accepted", "data": {"upload_id": "up-1", "schedule_count": n, "batch_count": 1}}
     if p == "/api/v1/employee/create":
         if "dup" in (req["json"] or {}).get("employee_email", ""):
@@ -62,40 +62,63 @@ def wait_run(c, run_id, timeout=15):
     raise AssertionError("run did not finish")
 
 
-def test_bulk_schedule_flow_with_ctx_call_and_202(client):
+def test_bulk_schedule_is_one_request_with_an_array_body_and_202(client):
     c, rid = client, client.req["Attendance - bulk schedule"]
     set_token(c, "tok-123456")
     up = c.post(f"/api/requests/{rid}/use-sample").json()
-    assert up["preview"]["types"] == {"email": "text", "warehouse_uuid": "text", "date": "date",
+    assert up["preview"]["types"] == {"email": "text", "warehouse": "text", "date": "date",
                                       "start_time": "time", "end_time": "time"}
     dr = c.post(f"/api/requests/{rid}/dry-run", json={"upload_id": up["upload"]["id"]}).json()
     assert dr["ok"], dr
-    assert [len(i["body"]["schedules"]) for i in dr["items"]] == [31, 25, 31]
-    lookups = [r for r in c.srv.requests if r["path"] == "/api/v1/employee/list"]
-    assert lookups[0]["query"] == {"page": "1", "page_size": "10", "filter_keys": "employee_email",
-                                   "value": "william.thaddeus@moladin.com"}
-    assert lookups[0]["headers"]["authorization"] == "Bearer tok-123456"
-    assert any(l.startswith("[ctx.call] Employee - find by email") for l in dr["logs"])
+    assert len(dr["items"]) == 1 and dr["items"][0]["label"] == "3 employee schedule group(s)"
+    groups = dr["items"][0]["body"]
+    assert [(g["email"], len(g["schedules"])) for g in groups] == [
+        ("william.thaddeus@moladin.com", 31), ("jason.adiwijaya@moladin.ai", 25), ("bryan.lakaoni@moladin.ai", 31)]
+    assert not [r for r in c.srv.requests if r["path"] == "/api/v1/employee/list"]    # no lookups any more
     curl = c.post(f"/api/requests/{rid}/curl", json={"index": 0}).json()["curl"]
-    assert "tok-123456" not in curl and "Bearer ****" in curl
+    assert "tok-123456" not in curl and "Bearer ****" in curl and "--data '[{" in curl
 
     pf = c.get(f"/api/requests/{rid}/send-check").json()
-    assert pf["ok"] and pf["count"] == 3 and pf["environment"] == "Development"
+    assert pf["ok"] and pf["count"] == 1 and pf["environment"] == "Development"
     run = c.post(f"/api/requests/{rid}/send", json={"mode": "send", "fingerprint": dr["fingerprint"]}).json()
     d = wait_run(c, run["id"])
-    assert d["run"]["status"] == "Done" and d["run"]["success_count"] == 3
+    assert d["run"]["status"] == "Done" and d["run"]["success_count"] == 1
     assert d["items"][0]["http_status"] == 202
-    assert d["items"][0]["accepted"] == {"upload_id": "up-1", "schedule_count": 31, "batch_count": 1}
+    assert d["items"][0]["accepted"] == {"upload_id": "up-1", "schedule_count": 87, "batch_count": 1}
+    sent = [r for r in c.srv.requests if r["path"] == "/api/v1/attendance/schedule/bulk"]
+    assert len(sent) == 1 and isinstance(sent[0]["json"], list) and len(sent[0]["json"]) == 3
+    assert sent[0]["headers"]["content-type"] == "application/json"
     # history comes back from MySQL once the run is no longer in memory
     main.manager.runs.clear()
     hist = c.get(f"/api/runs?request_id={rid}").json()["runs"]
     assert hist[0]["id"] == run["id"] and hist[0]["status"] == "Done"
     d2 = c.get(f"/api/runs/{run['id']}").json()
-    assert len(d2["items"]) == 3 and d2["items"][2]["accepted"]["schedule_count"] == 31
+    assert len(d2["items"]) == 1 and d2["items"][0]["accepted"]["schedule_count"] == 87
     full = c.get(f"/api/runs/{run['id']}/items/1").json()
     assert '"schedules"' in full["request_body"] and "tok-123456" not in full["request_body"]
     csv = c.get(f"/api/runs/{run['id']}/export.csv").text
-    assert csv.splitlines()[0].startswith("time_utc,item,label") and len(csv.splitlines()) == 4
+    assert csv.splitlines()[0].startswith("time_utc,item,label") and len(csv.splitlines()) == 2
+
+
+def test_ctx_call_reaches_another_request_with_the_folder_token(client):
+    """ctx.call through the HTTP engine (the seed no longer ships a helper request, so the test creates one)."""
+    c, rid = client, client.req["Employee - create"]
+    set_token(c, "tok-123456")
+    folder_id = c.get(f"/api/requests/{rid}").json()["folder_id"]
+    h = c.post("/api/requests", json={"folder_id": folder_id, "name": "Employee - find by email"}).json()
+    c.put(f"/api/requests/{h['id']}", json={"url": "{{base_url}}/api/v1/employee/list",
+                                            "params": [{"key": "page", "value": "1", "enabled": True}]})
+    c.put(f"/api/requests/{rid}", json={"script": (
+        "def transform(rows, ctx):\n"
+        "    r = ctx.call('Employee - find by email', query={'filter_keys': 'employee_email', 'value': 'william.thaddeus@moladin.com'})\n"
+        "    return [{'label': 'x', 'body': {'id': r['data']['items'][0]['id']}}]\n")})
+    dr = c.post(f"/api/requests/{rid}/dry-run", json={"upload_id": None}).json()
+    assert dr["ok"], dr
+    assert dr["items"][0]["body"] == {"id": "88032f68-0302-4c2a-8fcb-4c47898cbb6e"}
+    look = [r for r in c.srv.requests if r["path"] == "/api/v1/employee/list"][0]
+    assert look["query"] == {"page": "1", "filter_keys": "employee_email", "value": "william.thaddeus@moladin.com"}
+    assert look["headers"]["authorization"] == "Bearer tok-123456"
+    assert any(l.startswith("[ctx.call] Employee - find by email") for l in dr["logs"])
 
 
 def test_empty_token_blocks_send(client):

@@ -43,7 +43,10 @@ export function modal({ title, body, actions = [], wide = false, onClose }) {
       el('div.modal-head', title), el('div.modal-body', body), foot));
   for (const a of actions) {
     foot.appendChild(el('button.btn' + (a.primary ? '.btn-primary' : '') + (a.danger ? '.btn-danger' : ''),
-      { disabled: a.disabled, onClick: async () => { const r = a.onClick ? await a.onClick() : a.value; if (r !== false) close(r); } },
+      { disabled: a.disabled, onClick: async () => {
+        // a button's own onClick may return false to keep the dialog open; a plain `value` (even false, e.g. Cancel) always closes
+        if (a.onClick) { const r = await a.onClick(); if (r !== false) close(r); } else close(a.value);
+      } },
       a.label));
   }
   document.addEventListener('keydown', esc);
